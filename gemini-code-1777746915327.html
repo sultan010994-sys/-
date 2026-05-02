@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Мой 3D Просмотрщик Базис</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; display: flex; }
+        #viewer { flex-grow: 1; height: 100vh; background: #e8e8e8; }
+        #menu { width: 300px; background: white; border-left: 2px solid #ccc; padding: 15px; overflow-y: auto; }
+        .layer-item { display: flex; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #f0f0f0; padding: 5px; }
+        .layer-item input { margin-right: 10px; width: 18px; height: 18px; cursor: pointer; }
+        h2 { font-size: 18px; color: #333; }
+    </style>
+</head>
+<body>
+
+    <div id="viewer"></div>
+    <div id="menu">
+        <h2>Список деталей</h2>
+        <div id="list">Загрузка...</div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // === НАСТРОЙКИ ТВОИХ ФАЙЛОВ ===
+        const MY_OBJ = 'my_project.obj'; // ЗАМЕНИ НА СВОЁ ИМЯ ФАЙЛА
+        const MY_MTL = 'my_project.mtl'; // ЗАМЕНИ НА СВОЁ ИМЯ ФАЙЛА
+
+        // 1. Сцена и Камера
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xdddddd);
+
+        const camera = new THREE.PerspectiveCamera(45, (window.innerWidth - 300) / window.innerHeight, 1, 10000);
+        camera.position.set(1000, 1000, 1000);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth - 300, window.innerHeight);
+        renderer.outputColorSpace = THREE.SRGBColorSpace; // Цвета один в один
+        document.getElementById('viewer').appendChild(renderer.domElement);
+
+        // 2. Управление (Траектория)
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; 
+        controls.dampingFactor = 0.05;
+
+        // 3. Свет
+        scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+        const light = new THREE.DirectionalLight(0xffffff, 0.8);
+        light.position.set(1, 1, 1);
+        scene.add(light);
+
+        // 4. Загрузка материалов и модели
+        const mtlLoader = new MTLLoader();
+        mtlLoader.load(MY_MTL, (materials) => {
+            materials.preload();
+            
+            const objLoader = new OBJLoader();
+            objLoader.setMaterials(materials);
+            objLoader.load(MY_OBJ, (root) => {
+                
+                const listDiv = document.getElementById('list');
+                listDiv.innerHTML = '';
+
+                root.traverse((child) => {
+                    if (child.isMesh) {
+                        // Добавляем деталь в меню
+                        const div = document.createElement('div');
+                        div.className = 'layer-item';
+                        
+                        const check = document.createElement('input');
+                        check.type = 'checkbox';
+                        check.checked = true;
+                        check.onchange = () => { child.visible = check.checked; };
+
+                        const name = document.createElement('span');
+                        name.textContent = child.name || "Деталь";
+
+                        div.appendChild(check);
+                        div.appendChild(name);
+                        listDiv.appendChild(div);
+                    }
+                });
+
+                scene.add(root);
+                
+                // Центрируем камеру на модели
+                const box = new THREE.Box3().setFromObject(root);
+                const center = box.getCenter(new THREE.Vector3());
+                controls.target.copy(center);
+                controls.update();
+
+            });
+        });
+
+        // 5. Анимация
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Подстройка под размер экрана
+        window.addEventListener('resize', () => {
+            camera.aspect = (window.innerWidth - 300) / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth - 300, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
